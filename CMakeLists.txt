@@ -19,7 +19,7 @@ endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED TRUE CXX_STANDARD 20)
 
-# Make shader lookup independent of the IDE debugger working directory.
+# Путь к шейдерам не зависит от рабочей папки отладчика.
 target_compile_definitions(${PROJECT_NAME} PRIVATE LAB_SHADER_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders/\")
 
 FetchContent_Declare(
@@ -78,7 +78,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 	${imgui_SOURCE_DIR}/imgui_demo.cpp
 )
 
-# Compile shaders
+# Компиляция шейдеров
 find_program(GLSLC_FOUND glslc REQUIRED)
 if(GLSLC_FOUND)
 	set(_SHADER_BINARIES)

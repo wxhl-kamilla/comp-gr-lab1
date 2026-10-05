@@ -14,15 +14,17 @@
 
 namespace {
 
-constexpr int32_t default_window_width = 1280;
-constexpr int32_t default_window_height = 720;
+	// Начальные размеры и название окна.
+	constexpr int32_t default_window_width = 1280;
+	constexpr int32_t default_window_height = 720;
 
-constexpr char default_window_title[] = "Vulkan Starter App";
+	constexpr char default_window_title[] = "Vulkan Starter App";
 
-GLFWwindow* glfw_window;
+	GLFWwindow* glfw_window;
 
-} // namespace
+}
 
+// Создание окна и запуск приложения.
 int main() {
 	int status = EXIT_SUCCESS;
 
@@ -34,20 +36,22 @@ int main() {
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 	glfw_window = glfwCreateWindow(default_window_width, default_window_height,
-	                               default_window_title, nullptr, nullptr);
+		default_window_title, nullptr, nullptr);
 	if (glfw_window == nullptr) {
 		status = EXIT_FAILURE;
 		goto err_null_window;
 	}
 
-	glfwSetFramebufferSizeCallback(glfw_window, [](GLFWwindow*, int width, int height){
+	// При изменении размеров окна обновляем область отрисовки.
+	glfwSetFramebufferSizeCallback(glfw_window, [](GLFWwindow*, int width, int height) {
 		if (width == 0 || height == 0) {
 			return;
 		}
 
 		graphics::internal::resize(width, height);
-	});
+		});
 
+	// Инициализация интерфейса ImGui, Vulkan и ресурсов сцены.
 	if (ImGui::CreateContext() == nullptr) {
 		std::cerr << "Failed to create ImGUI context\n";
 		status = EXIT_FAILURE;
@@ -72,6 +76,7 @@ int main() {
 		goto err_application_init;
 	}
 
+	// Главный цикл: обработка событий, обновление сцены и вывод очередного кадра.
 	while (!glfwWindowShouldClose(glfw_window)) {
 		const double time = glfwGetTime();
 
@@ -87,6 +92,7 @@ int main() {
 		graphics::internal::submitAndPresent();
 	}
 
+	// Освобождение ресурсов; сюда же ведут переходы при ошибках инициализации.
 	application::shutdown();
 err_application_init:
 	graphics::internal::shutdown();

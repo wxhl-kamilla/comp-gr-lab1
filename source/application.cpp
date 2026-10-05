@@ -14,9 +14,11 @@
 namespace application {
 namespace {
 
-// Matrices are stored by columns, as GLSL expects. m[column * 4 + row].
+
+// Матрицы хранятся по столбцам: индекс элемента — столбец * 4 + строка.
 struct Mat4 { float m[16]{}; };
 Mat4 identity() { Mat4 a{}; for (int i = 0; i < 4; ++i) a.m[i * 5] = 1.f; return a; }
+// Умножение матриц преобразований.
 Mat4 multiply(const Mat4& a, const Mat4& b) {
     Mat4 c{};
     for (int col = 0; col < 4; ++col)
@@ -25,6 +27,7 @@ Mat4 multiply(const Mat4& a, const Mat4& b) {
                 c.m[col * 4 + row] += a.m[k * 4 + row] * b.m[col * 4 + k];
     return c;
 }
+// Матрицы переноса, масштаба и поворота вокруг трёх осей.
 Mat4 translate(float x, float y, float z) {
     Mat4 a = identity(); a.m[12] = x; a.m[13] = y; a.m[14] = z; return a;
 }
@@ -45,6 +48,7 @@ Mat4 rotateZ(float a) {
 }
 constexpr float pi = 3.14159265358979323846f;
 float radians(float degrees) { return degrees * pi / 180.f; }
+// Перспективная проекция: дальние объекты выглядят меньше. Глубина в Vulkan от 0 до 1.
 Mat4 perspective(float aspect) {
     Mat4 a{};
     constexpr float near = 0.1f, far = 100.f;
@@ -52,8 +56,9 @@ Mat4 perspective(float aspect) {
     a.m[0] = f / aspect; a.m[5] = f;
     a.m[10] = far / (near - far); a.m[11] = -1.f;
     a.m[14] = (far * near) / (near - far);
-    return a; // Vulkan depth: 0..1.
+    return a; 
 }
+// Ортографическая проекция без уменьшения объектов вдали.
 Mat4 orthographic(float aspect) {
     const float h = 3.6f, w = h * aspect, near = 0.1f, far = 100.f;
     Mat4 a = identity();
@@ -62,8 +67,10 @@ Mat4 orthographic(float aspect) {
     return a;
 }
 
-struct Vertex { float position[3]; float color[3]; };
-// Eight corners of a box with unequal dimensions; derive RGB from local XYZ.
+// Координаты и цвета восьми вершин параллелепипеда.
+struct Vertex { // Начальные параметры объектов и анимации.
+float position[3]; float color[3]; };
+
 const std::array<Vertex, 8> vertices = [] {
     std::array<Vertex, 8> result{};
     for (int i = 0; i < 8; ++i) {
@@ -76,11 +83,13 @@ const std::array<Vertex, 8> vertices = [] {
     }
     return result;
 }();
+// Каждая грань состоит из двух треугольников; здесь указаны номера их вершин.
 constexpr uint16_t indices[] = {
     4,5,7, 4,7,6, 1,0,2, 1,2,3,
     0,4,6, 0,6,2, 5,1,3, 5,3,7,
     2,6,7, 2,7,3, 0,1,5, 0,5,4
 };
+// Данные для шейдеров и ресурсы для отрисовки объектов.
 struct alignas(16) Uniform { Mat4 mvp; float tint[4]; };
 struct Buffer { VkBuffer handle = VK_NULL_HANDLE; VmaAllocation allocation = VK_NULL_HANDLE; };
 Buffer vertexBuffer, indexBuffer;
@@ -100,6 +109,7 @@ float secondOffset[3] = {2.5f, 0.f, -1.f};
 bool paused = false, secondVisible = true, usePerspective = true;
 double previousTime = -1.0;
 
+// Создание буферов, запись данных в память и освобождение буферов.
 bool createBuffer(VkDeviceSize bytes, VkBufferUsageFlags usage, Buffer& target) {
     const VkBufferCreateInfo info{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                                   .size = bytes, .usage = usage,
@@ -122,6 +132,7 @@ bool writeBuffer(const Buffer& b, const void* data, size_t bytes) {
     vmaUnmapMemory(allocator, b.allocation);
     return true;
 }
+// Чтение скомпилированных шейдеров из файлов SPIR-V.
 std::vector<char> load(const char* path) {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file) throw std::runtime_error(std::string("Cannot open shader: ") + path);
@@ -143,6 +154,7 @@ VkShaderModule shader(const char* path) {
     return result;
 }
 
+// Настройка графического конвейера: шейдеры, вершины, треугольники и проверка глубины.
 bool createPipeline() {
     auto& ctx = graphics::internal::context;
     VkShaderModule vert = VK_NULL_HANDLE, frag = VK_NULL_HANDLE;
@@ -207,8 +219,9 @@ bool createPipeline() {
     vkDestroyShaderModule(ctx.device, vert, nullptr);
     return result == VK_SUCCESS;
 }
-} // namespace
+} 
 
+// Подготовка геометрии и буферов перед первым кадром.
 bool initialize() {
     auto& ctx = graphics::internal::context;
     if (!createBuffer(sizeof(Vertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertexBuffer) ||
@@ -217,6 +230,7 @@ bool initialize() {
         !writeBuffer(indexBuffer, indices, sizeof(indices))) return (shutdown(), false);
     for (auto& b : uniformBuffers)
         if (!createBuffer(sizeof(Uniform), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, b)) return (shutdown(), false);
+    // Настройка доступа шейдеров к матрице преобразования и цвету каждого объекта.
     const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
                                                  VK_SHADER_STAGE_VERTEX_BIT, nullptr};
     const VkDescriptorSetLayoutCreateInfo layoutInfo{
@@ -248,6 +262,7 @@ bool initialize() {
     return true;
 }
 
+// Освобождение ресурсов после завершения отрисовки.
 void shutdown() {
     auto& ctx = graphics::internal::context;
     vkQueueWaitIdle(ctx.graphics_queue);
@@ -259,11 +274,13 @@ void shutdown() {
     destroyBuffer(indexBuffer); destroyBuffer(vertexBuffer);
 }
 
+// Обновление анимации и элементов управления в окне ImGui.
 void update(double time) {
     if (previousTime < 0) previousTime = time;
     const double delta = std::clamp(time - previousTime, 0.0, 0.1);
     previousTime = time;
     if (!paused) phase += speed * static_cast<float>(delta);
+    // Поля для изменения положения, поворота, масштаба и параметров движения.
     ImGui::Begin("Lab 1: parallelepiped (variant 3)");
     ImGui::Checkbox("Perspective projection", &usePerspective);
     ImGui::DragFloat3("Position", position, 0.02f);
@@ -279,13 +296,16 @@ void update(double time) {
     ImGui::End();
 }
 
+// Подготовка матриц и команд отрисовки текущего кадра.
 void render(const graphics::internal::FrameData& fd) {
     auto& ctx = graphics::internal::context;
     if (!fd.command_buffer || !fd.framebuffer) return;
     const float aspect = static_cast<float>(ctx.swapchain_extent.width) /
                          static_cast<float>(ctx.swapchain_extent.height);
     const Mat4 projection = usePerspective ? perspective(aspect) : orthographic(aspect);
-    const Mat4 view = translate(0.f, 0.f, -8.f); // Fixed camera at Z = +8.
+    // Камера находится в точке (0, 0, 8) и смотрит вдоль отрицательного направления Z.
+    const Mat4 view = translate(0.f, 0.f, -8.f); 
+    // Движение по орбите, поворот и масштаб первого объекта.
     const Mat4 orbit = translate(radius * std::cos(phase),
                                  0.35f * std::sin(2.f * phase),
                                  radius * std::sin(phase));
@@ -293,14 +313,17 @@ void render(const graphics::internal::FrameData& fd) {
         multiply(multiply(rotateZ(radians(rotation[2] + phase * 30.f)),
                           rotateY(radians(rotation[1] + phase * 50.f))),
                  multiply(rotateX(radians(rotation[0])), scale(size[0], size[1], size[2]))));
+    // Второй объект использует те же преобразования с дополнительным смещением.
     const Mat4 models[]{base, multiply(translate(secondOffset[0], secondOffset[1], secondOffset[2]), base)};
     const size_t count = secondVisible ? 2 : 1;
-    // prepare() waits for the previous GPU frame. Writing shared UBOs here is safe.
+    
+    // Передача итоговой матрицы P * V * M и цвета в буферы шейдеров после ожидания кадра в prepare().
     for (size_t i = 0; i < count; ++i) {
         Uniform u{multiply(projection, multiply(view, models[i])),
                   {tint[0], tint[1], tint[2], 1.f}};
         if (!writeBuffer(uniformBuffers[i], &u, sizeof(u))) std::cerr << "Uniform update failed\n";
     }
+    // Начало записи команд и очистка цвета фона и буфера глубины.
     vkResetCommandBuffer(fd.command_buffer, 0);
     const VkCommandBufferBeginInfo begin{.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     vkBeginCommandBuffer(fd.command_buffer, &begin);
@@ -313,12 +336,14 @@ void render(const graphics::internal::FrameData& fd) {
         .renderArea={{0,0},ctx.swapchain_extent}, .clearValueCount=2, .pClearValues=clear};
     vkCmdBeginRenderPass(fd.command_buffer, &pass, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(fd.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    // Область вывода; отрицательная высота viewport направляет экранную ось Y вверх.
     const VkViewport vp{0.f, static_cast<float>(ctx.swapchain_extent.height),
         static_cast<float>(ctx.swapchain_extent.width),
         -static_cast<float>(ctx.swapchain_extent.height), 0.f, 1.f};
     const VkRect2D scissor{{0,0},ctx.swapchain_extent};
     vkCmdSetViewport(fd.command_buffer, 0, 1, &vp);
     vkCmdSetScissor(fd.command_buffer, 0, 1, &scissor);
+    // Подключение геометрии и отрисовка 36 индексов (12 треугольников) для каждого объекта.
     const VkDeviceSize offset = 0;
     vkCmdBindVertexBuffers(fd.command_buffer, 0, 1, &vertexBuffer.handle, &offset);
     vkCmdBindIndexBuffer(fd.command_buffer, indexBuffer.handle, 0, VK_INDEX_TYPE_UINT16);
@@ -330,4 +355,4 @@ void render(const graphics::internal::FrameData& fd) {
     vkCmdEndRenderPass(fd.command_buffer);
     vkEndCommandBuffer(fd.command_buffer);
 }
-} // namespace application
+} 

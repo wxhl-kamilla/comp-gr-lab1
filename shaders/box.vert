@@ -6,7 +6,9 @@ layout(set = 0, binding = 0) uniform Scene {
     vec4 tint;
 } scene;
 layout(location = 0) out vec3 vertexColor;
+// Преобразование координат вершины матрицей MVP и применение множителя цвета.
 void main() {
     gl_Position = scene.mvp * vec4(inPosition, 1.0);
     vertexColor = inColor * scene.tint.rgb;
 }
+
