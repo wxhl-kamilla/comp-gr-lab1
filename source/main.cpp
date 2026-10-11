@@ -2,8 +2,8 @@
 #include <climits>
 
 #include <iostream>
+#include <exception>
 
-#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 #include <imgui.h>
@@ -14,20 +14,22 @@
 
 namespace {
 
-	// Начальные размеры и название окна.
 	constexpr int32_t default_window_width = 1280;
 	constexpr int32_t default_window_height = 720;
 
-	constexpr char default_window_title[] = "Vulkan Starter App";
+	constexpr char default_window_title[] = "CG Lab 2 - Camera and Lighting - Variant 3";
 
 	GLFWwindow* glfw_window;
 
-}
+} // Конец пространства имён.
 
-// Создание окна и запуск приложения.
 int main() {
 	int status = EXIT_SUCCESS;
 
+	// Сообщение GLFW помогает отличить ошибку окна или драйвера от ошибки нашей сцены.
+	glfwSetErrorCallback([](int code, const char* message) {
+		std::cerr << "GLFW " << code << ": " << message << '\n';
+		});
 	if (!glfwInit()) {
 		std::cerr << "Failed to initialize GLFW\n";
 		return EXIT_FAILURE;
@@ -42,7 +44,6 @@ int main() {
 		goto err_null_window;
 	}
 
-	// При изменении размеров окна обновляем область отрисовки.
 	glfwSetFramebufferSizeCallback(glfw_window, [](GLFWwindow*, int width, int height) {
 		if (width == 0 || height == 0) {
 			return;
@@ -51,7 +52,6 @@ int main() {
 		graphics::internal::resize(width, height);
 		});
 
-	// Инициализация интерфейса ImGui, Vulkan и ресурсов сцены.
 	if (ImGui::CreateContext() == nullptr) {
 		std::cerr << "Failed to create ImGUI context\n";
 		status = EXIT_FAILURE;
@@ -76,11 +76,15 @@ int main() {
 		goto err_application_init;
 	}
 
-	// Главный цикл: обработка событий, обновление сцены и вывод очередного кадра.
+	// GLFW обрабатывает события; ImGui меняет настройки до записи нового кадра.
 	while (!glfwWindowShouldClose(glfw_window)) {
 		const double time = glfwGetTime();
 
 		glfwPollEvents();
+		// У свёрнутого окна нет изображения для отрисовки.
+		int width = 0, height = 0;
+		glfwGetFramebufferSize(glfw_window, &width, &height);
+		if (width == 0 || height == 0) { glfwWaitEvents(); continue; }
 		ImGui_ImplGlfw_NewFrame();
 
 		ImGui::NewFrame();
@@ -88,11 +92,14 @@ int main() {
 		ImGui::Render();
 
 		graphics::internal::FrameData fd = graphics::internal::prepare();
-		application::render(fd);
+		// prepare уже дождалась GPU: только теперь можно обновить буферы.
+		try { application::render(fd); }
+		catch (const std::exception& e) {
+			std::cerr << e.what() << "\n"; status = EXIT_FAILURE; break;
+		}
 		graphics::internal::submitAndPresent();
 	}
 
-	// Освобождение ресурсов; сюда же ведут переходы при ошибках инициализации.
 	application::shutdown();
 err_application_init:
 	graphics::internal::shutdown();

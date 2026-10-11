@@ -5,12 +5,12 @@ project(vulkan-starter-app LANGUAGES C CXX)
 
 add_executable(${PROJECT_NAME} source/main.cpp source/graphics_internal.cpp source/application.cpp)
 
-if(LINUX)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wno-missing-field-initializers)
 elseif(APPLE)
 	target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wno-missing-field-initializers)
 elseif(MSVC)
-	target_compile_options(${PROJECT_NAME} PRIVATE /W4 /wd4201)
+	target_compile_options(${PROJECT_NAME} PRIVATE /W4 /wd4201 /utf-8)
 	target_link_options(${PROJECT_NAME} PRIVATE /subsystem:windows /entry:mainCRTStartup)
 	target_compile_definitions(${PROJECT_NAME} PRIVATE -D_USE_MATH_DEFINES)
 else()
@@ -20,7 +20,7 @@ endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD_REQUIRED TRUE CXX_STANDARD 20)
 
 # Путь к шейдерам не зависит от рабочей папки отладчика.
-target_compile_definitions(${PROJECT_NAME} PRIVATE LAB_SHADER_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders/\")
+target_compile_definitions(${PROJECT_NAME} PRIVATE GLFW_INCLUDE_NONE LAB_SHADER_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders/\")
 
 FetchContent_Declare(
 	glfw
@@ -46,7 +46,7 @@ FetchContent_Declare(
 	GIT_TAG v1.92.9
 )
 
-find_package(Vulkan REQUIRED)
+find_package(Vulkan 1.4.321 REQUIRED)
 
 set(GLFW_LIBRARY_TYPE STATIC)
 set(GLFW_BUILD_EXAMPLES OFF)
@@ -78,7 +78,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 	${imgui_SOURCE_DIR}/imgui_demo.cpp
 )
 
-# Компиляция шейдеров
+# Собираем GLSL в SPIR-V при изменении шейдеров.
 find_program(GLSLC_FOUND glslc REQUIRED)
 if(GLSLC_FOUND)
 	set(_SHADER_BINARIES)
@@ -90,7 +90,8 @@ if(GLSLC_FOUND)
 
 		add_custom_command(
 			OUTPUT ${SHADER_BINARY_PATH}
-			COMMAND glslc ${SHADER_SOURCE} -o ${SHADER_BINARY_PATH}
+			COMMAND "${GLSLC_FOUND}" "${SHADER_SOURCE}" -o "${SHADER_BINARY_PATH}"
+			VERBATIM
 			DEPENDS ${SHADER_SOURCE}
 			COMMENT "Compiling ${SHADER_FILE} shader"
 		)
@@ -98,8 +99,7 @@ if(GLSLC_FOUND)
 		list(APPEND _SHADER_BINARIES ${SHADER_BINARY_PATH})
 	endmacro()
 
-	# To compile shader file, use compile_shader function with a file name
-	# of a shader inside shaders directory. See example below:
+	# Оба шейдера нужны для отрисовки объектов и визуализации света.
 
 	compile_shader(box.vert)
 	compile_shader(box.frag)

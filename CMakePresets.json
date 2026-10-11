@@ -26,12 +26,14 @@
 		{
 			"name": "msvc-debug",
 			"inherits": "debug",
-			"generator": "Visual Studio 17 2022"
+			"generator": "Visual Studio 17 2022",
+			"architecture": "x64"
 		},
 		{
 			"name": "msvc-release",
 			"inherits": "release",
-			"generator": "Visual Studio 17 2022"
+			"generator": "Visual Studio 17 2022",
+			"architecture": "x64"
 		}
 	]
 }
